@@ -1,0 +1,13 @@
+public static void applyJSI(CompilationUnit cu) {
+    cu.accept(new VoidVisitorAdapter<Void>() {
+        @Override
+        public void visit(FieldDeclaration n, Void arg) {
+            super.visit(n, arg);
+
+            // اگر متغیر static نیست، آن را static کنیم
+            if (!n.isStatic()) {
+                n.addModifier(Modifier.Keyword.STATIC);
+            }
+        }
+    }, null);
+}

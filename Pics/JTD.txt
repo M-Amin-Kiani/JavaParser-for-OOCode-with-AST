@@ -1,0 +1,24 @@
+public static void applyJTD(CompilationUnit cu) {
+    cu.accept(new VoidVisitorAdapter<Void>() {
+        @Override
+        public void visit(FieldAccessExpr n, Void arg) {
+            super.visit(n, arg);
+
+            // بررسی اینکه آیا کلمه کلیدی this قابل حذف است
+            if (n.getScope().isThisExpr()) {
+                NameExpr newName = new NameExpr(n.getNameAsString());
+                n.replace(newName); // جایگزینی با نام ساده بدون this
+            }
+        }
+
+        @Override
+        public void visit(MethodCallExpr n, Void arg) {
+            super.visit(n, arg);
+
+            // بررسی اینکه آیا فراخوانی متد شامل this است
+            if (n.getScope().isPresent() && n.getScope().get().isThisExpr()) {
+                n.removeScope(); // حذف this از قبل فراخوانی متد
+            }
+        }
+    }, null);
+}

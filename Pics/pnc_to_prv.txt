@@ -1,0 +1,414 @@
+// PNC: change the type of the object after new statement
+    public static void applyPNC(CompilationUnit cu) {
+        // Map to store parent class to its child classes
+        Map<String, List<String>> classHierarchy = new HashMap<>();
+
+        // First pass: Find all class declarations and their parent classes
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ClassOrInterfaceDeclaration n, Void arg) {
+                super.visit(n, arg);
+                if (n.getExtendedTypes().isNonEmpty()) {
+                    String parentClass = n.getExtendedTypes().get(0).getNameAsString();
+                    String childClass = n.getNameAsString();
+                    classHierarchy.putIfAbsent(parentClass, new ArrayList<>());
+                    classHierarchy.get(parentClass).add(childClass);
+                }
+            }
+        }, null);
+
+        // Second pass: Modify object creation expressions
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ObjectCreationExpr n, Void arg) {
+                super.visit(n, arg);
+
+                // Get the type of the object being created
+                String originalType = n.getType().asString();
+
+                // Check if the type has any known child classes
+                if (classHierarchy.containsKey(originalType)) {
+                    List<String> childClasses = classHierarchy.get(originalType);
+                    if (!childClasses.isEmpty()) {
+                        // Select a random child class
+                        String newChildType = childClasses.get((int) (Math.random() * childClasses.size()));
+
+                        // Replace the type of the object being instantiated
+                        n.setType(newChildType);
+
+                        // Debug output
+                        System.out.println("Replaced instantiation of " + originalType + " with " + newChildType + " in: " + n);
+                    }
+                }
+            }
+        }, null);
+    }
+
+
+
+    public static void applyPMD(CompilationUnit cu) {
+        // To store mappings of variable names to their assigned object types
+        final Map<String, String> variableToTypeMap = new HashMap<>();
+
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(VariableDeclarator variableDeclarator, Void arg) {
+                super.visit(variableDeclarator, arg);
+
+                // Handle inline declaration and initialization
+                if (variableDeclarator.getInitializer().isPresent() &&
+                        variableDeclarator.getInitializer().get() instanceof ObjectCreationExpr) {
+
+                    ObjectCreationExpr initializer = (ObjectCreationExpr) variableDeclarator.getInitializer().get();
+                    String actualType = initializer.getType().asString();
+
+                    // Update the declaration type to the actual object type
+                    variableDeclarator.setType(actualType);
+                    variableToTypeMap.put(variableDeclarator.getNameAsString(), actualType);
+
+                    // Debug output
+                    System.out.println("Changed declaration type of variable '"
+                            + variableDeclarator.getNameAsString()
+                            + "' to '" + actualType + "'");
+                }
+            }
+
+            @Override
+            public void visit(AssignExpr assignExpr, Void arg) {
+                super.visit(assignExpr, arg);
+
+                // Handle separate declaration and assignment
+                if (assignExpr.getTarget() instanceof NameExpr &&
+                        assignExpr.getValue() instanceof ObjectCreationExpr) {
+
+                    NameExpr target = (NameExpr) assignExpr.getTarget();
+                    ObjectCreationExpr initializer = (ObjectCreationExpr) assignExpr.getValue();
+                    String actualType = initializer.getType().asString();
+
+                    // Find the corresponding variable declaration
+                    cu.findAll(VariableDeclarator.class).stream()
+                            .filter(vd -> vd.getNameAsString().equals(target.getNameAsString()))
+                            .findFirst()
+                            .ifPresent(vd -> {
+                                vd.setType(actualType); // Update the type
+                                variableToTypeMap.put(target.getNameAsString(), actualType);
+
+                                // Debug output
+                                System.out.println("Changed declaration type of variable '"
+                                        + vd.getNameAsString()
+                                        + "' to '" + actualType + "'");
+                            });
+                }
+            }
+        }, null);
+    }
+
+
+
+    public static void applyPPD(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodDeclaration methodDeclaration, Void arg) {
+                super.visit(methodDeclaration, arg);
+
+                // Iterate over all parameters of the method
+                methodDeclaration.getParameters().forEach(parameter -> {
+                    String originalType = parameter.getType().asString();
+
+                    // Find child classes for the parameter type
+                    List<String> childClasses = findChildClasses(cu, originalType);
+
+                    if (!childClasses.isEmpty()) {
+                        // Pick a random child class
+                        String randomChild = childClasses.get((int) (Math.random() * childClasses.size()));
+
+                        // Update the parameter type
+                        parameter.setType(randomChild);
+
+                        // Debug output
+                        System.out.println("Changed parameter type of '" + parameter.getNameAsString()
+                                + "' from '" + originalType + "' to '" + randomChild + "'");
+                    }
+                });
+            }
+        }, null);
+    }
+
+    // Helper method to find child classes of a given class type within the CompilationUnit
+    private static List<String> findChildClasses(CompilationUnit cu, String parentType) {
+        List<String> childClasses = new ArrayList<>();
+
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ClassOrInterfaceDeclaration classDeclaration, Void arg) {
+                super.visit(classDeclaration, arg);
+
+                // Check if the class extends the given parent type
+                classDeclaration.getExtendedTypes().forEach(extendedType -> {
+                    if (extendedType.getNameAsString().equals(parentType)) {
+                        childClasses.add(classDeclaration.getNameAsString());
+                    }
+                });
+            }
+        }, null);
+
+        return childClasses;
+    }
+
+
+    // PCI: Type Cast Operator Insertion
+    public static void applyPCI(CompilationUnit cu) {
+        Map<String, String> parentChildMap = new HashMap<>();
+
+        // Step 1: Collect variables declared with parent types but initialized with child types
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(VariableDeclarator n, Void arg) {
+                super.visit(n, arg);
+                if (n.getInitializer().isPresent()) {
+                    Expression initializer = n.getInitializer().get();
+                    if (initializer instanceof ObjectCreationExpr) {
+                        ObjectCreationExpr objectCreationExpr = (ObjectCreationExpr) initializer;
+                        String parentType = n.getTypeAsString();
+                        String childType = objectCreationExpr.getTypeAsString();
+                        if (!parentType.equals(childType)) {
+                            parentChildMap.put(n.getNameAsString(), parentType);
+                        }
+                    }
+                }
+            }
+        }, null);
+
+        // Step 2: Insert type casting when the variable is used
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodCallExpr n, Void arg) {
+                super.visit(n, arg);
+                n.getScope().ifPresent(scope -> {
+                    if (scope instanceof NameExpr) {
+                        NameExpr nameExpr = (NameExpr) scope;
+                        String varName = nameExpr.getNameAsString();
+                        if (parentChildMap.containsKey(varName)) {
+                            String parentType = parentChildMap.get(varName);
+                            CastExpr castExpr = new CastExpr(new ClassOrInterfaceType(null, parentType), nameExpr.clone());
+                            n.setScope(castExpr);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void visit(NameExpr n, Void arg) {
+                super.visit(n, arg);
+                String varName = n.getNameAsString();
+                if (parentChildMap.containsKey(varName)) {
+                    String parentType = parentChildMap.get(varName);
+                    CastExpr castExpr = new CastExpr(new ClassOrInterfaceType(null, parentType), n.clone());
+                    n.replace(castExpr);
+                }
+            }
+        }, null);
+    }
+
+
+
+
+    public static void applyPCD(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(CastExpr n, Void arg) {
+                super.visit(n, arg);
+                Expression innerExpr = n.getExpression();
+                n.replace(innerExpr); // Remove the cast expression and replace it with the inner expression
+            }
+        }, null);
+    }
+
+
+    // PCD2: Type Cast Operator Deletion(with conditions of PCI)
+//    public static void applyPCD(CompilationUnit cu) {
+//        Map<String, String> parentChildMap = new HashMap<>();
+//
+//        // Step 1: Collect variables declared with parent types but initialized with child types
+//        cu.accept(new VoidVisitorAdapter<Void>() {
+//            @Override
+//            public void visit(VariableDeclarator n, Void arg) {
+//                super.visit(n, arg);
+//                if (n.getInitializer().isPresent()) {
+//                    Expression initializer = n.getInitializer().get();
+//                    if (initializer instanceof ObjectCreationExpr) {
+//                        ObjectCreationExpr objectCreationExpr = (ObjectCreationExpr) initializer;
+//                        String parentType = n.getTypeAsString();
+//                        String childType = objectCreationExpr.getTypeAsString();
+//                        if (!parentType.equals(childType)) {
+//                            parentChildMap.put(n.getNameAsString(), parentType);
+//                        }
+//                    }
+//                }
+//            }
+//        }, null);
+//
+//        // Step 2: Remove type casting for relevant variables
+//        cu.accept(new VoidVisitorAdapter<Void>() {
+//            @Override
+//            public void visit(CastExpr n, Void arg) {
+//                super.visit(n, arg);
+//                Expression innerExpr = n.getExpression();
+//
+//                // Check if the inner expression matches a variable in the parentChildMap
+//                if (innerExpr instanceof NameExpr) {
+//                    NameExpr nameExpr = (NameExpr) innerExpr;
+//                    String varName = nameExpr.getNameAsString();
+//                    if (parentChildMap.containsKey(varName)) {
+//                        n.replace(innerExpr); // Remove the cast and replace it with the inner expression
+//                    }
+//                }
+//            }
+//        }, null);
+//    }
+
+
+    public static void applyPPC(CompilationUnit cu) {
+        Map<String, String> selfConstructedMap = new HashMap<>();
+        Map<String, List<String>> parentToChildrenMap = new HashMap<>();
+
+        // Step 1: Collect variables declared with their own type and initialized using their own constructor
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(VariableDeclarator n, Void arg) {
+                super.visit(n, arg);
+                if (n.getInitializer().isPresent()) {
+                    Expression initializer = n.getInitializer().get();
+                    if (initializer instanceof ObjectCreationExpr) {
+                        ObjectCreationExpr objectCreationExpr = (ObjectCreationExpr) initializer;
+                        String declaredType = n.getTypeAsString();
+                        String constructedType = objectCreationExpr.getTypeAsString();
+                        if (declaredType.equals(constructedType)) {
+                            selfConstructedMap.put(n.getNameAsString(), declaredType);
+                        }
+                    }
+                }
+            }
+        }, null);
+
+        // Step 2: Build the map of parent-to-children relationships dynamically
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ClassOrInterfaceDeclaration n, Void arg) {
+                super.visit(n, arg);
+                if (n.getExtendedTypes().isNonEmpty()) {
+                    String childType = n.getNameAsString();
+                    n.getExtendedTypes().forEach(parent -> {
+                        String parentType = parent.getNameAsString();
+                        parentToChildrenMap.computeIfAbsent(parentType, k -> new ArrayList<>()).add(childType);
+                    });
+                }
+            }
+        }, null);
+
+        // Step 3: Replace the first type cast to a child with another valid child type
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(CastExpr n, Void arg) {
+                super.visit(n, arg);
+
+                Expression innerExpr = n.getExpression();
+                if (innerExpr instanceof NameExpr) {
+                    NameExpr nameExpr = (NameExpr) innerExpr;
+                    String varName = nameExpr.getNameAsString();
+
+                    // Check if the variable matches selfConstructedMap
+                    if (selfConstructedMap.containsKey(varName)) {
+                        String parentType = selfConstructedMap.get(varName);
+
+                        // Get child classes of the parent type
+                        List<String> childTypes = parentToChildrenMap.getOrDefault(parentType, List.of());
+                        if (!childTypes.isEmpty()) {
+                            String currentCastType = n.getTypeAsString();
+
+                            // Find an alternative child type to replace the current one
+                            for (String childType : childTypes) {
+                                if (!childType.equals(currentCastType)) {
+                                    n.setType(childType); // Change the cast type
+                                    System.out.println("Changed cast type: " + currentCastType + " -> " + childType);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, null);
+    }
+
+
+
+
+    public static void applyPRV(CompilationUnit cu) {
+        // Step 1: Collect information about declared variables and their types
+        Map<String, String> variableToTypeMap = new HashMap<>(); // Tracks variable names and their types
+        Map<String, List<String>> parentToChildrenMap = new HashMap<>(); // Tracks parent to child relationships
+
+        // Collect variable declarations
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(VariableDeclarator n, Void arg) {
+                super.visit(n, arg);
+                String varName = n.getNameAsString();
+                String varType = n.getTypeAsString();
+
+                variableToTypeMap.put(varName, varType);
+
+                // Check if the initializer is a child type
+                if (n.getInitializer().isPresent() && n.getInitializer().get() instanceof ObjectCreationExpr) {
+                    ObjectCreationExpr initializer = (ObjectCreationExpr) n.getInitializer().get();
+                    String initializerType = initializer.getTypeAsString();
+                    parentToChildrenMap.computeIfAbsent(varType, k -> new ArrayList<>()).add(initializerType);
+                }
+            }
+        }, null);
+
+        // Step 2: Modify assignment statements
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(AssignExpr n, Void arg) {
+                super.visit(n, arg);
+
+                // Check if the left-hand side is a variable of a parent type
+                if (n.getTarget() instanceof NameExpr) {
+                    NameExpr target = (NameExpr) n.getTarget();
+                    String targetVar = target.getNameAsString();
+
+                    if (variableToTypeMap.containsKey(targetVar)) {
+                        String targetType = variableToTypeMap.get(targetVar);
+
+                        // Check if the right-hand side is a child object
+                        Expression value = n.getValue();
+                        if (value instanceof NameExpr) {
+                            NameExpr valueExpr = (NameExpr) value;
+                            String valueVar = valueExpr.getNameAsString();
+
+                            if (variableToTypeMap.containsKey(valueVar)) {
+                                String valueType = variableToTypeMap.get(valueVar);
+
+                                // Find an alternative compatible child type
+                                List<String> children = parentToChildrenMap.getOrDefault(targetType, new ArrayList<>());
+                                for (String childType : children) {
+                                    if (!childType.equals(valueType)) {
+                                        // Find a variable of the alternative child type
+                                        for (Map.Entry<String, String> entry : variableToTypeMap.entrySet()) {
+                                            if (entry.getValue().equals(childType)) {
+                                                n.setValue(new NameExpr(entry.getKey()));
+                                                System.out.println("Changed assignment: " + valueVar + " -> " + entry.getKey());
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, null);
+    }

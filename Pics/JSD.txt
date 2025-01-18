@@ -1,0 +1,25 @@
+    // JSD: حذف مودفایرهای static، public، private و ... از متدها، فیلدها و کلاس‌ها
+    public static void applyJSD(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodDeclaration n, Void arg) {
+                super.visit(n, arg);
+                // حذف تمام مودفایرها
+                n.getModifiers().clear();
+            }
+
+            @Override
+            public void visit(FieldDeclaration n, Void arg) {
+                super.visit(n, arg);
+                // حذف تمام مودفایرها
+                n.getModifiers().clear();
+            }
+
+            @Override
+            public void visit(ClassOrInterfaceDeclaration n, Void arg) {
+                super.visit(n, arg);
+                // حذف تمام مودفایرها
+                n.getModifiers().clear();
+            }
+        }, null);
+    }

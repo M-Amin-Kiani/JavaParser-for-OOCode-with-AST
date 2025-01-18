@@ -1,0 +1,35 @@
+    public static void applyOMD(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ClassOrInterfaceDeclaration clazz, Void arg) {
+                super.visit(clazz, arg);
+
+                // نقشه‌ای برای ذخیره متدهای اورلود‌شده
+                Map<String, List<MethodDeclaration>> overloadedMethods = new HashMap<>();
+
+                // شناسایی متدهای اورلود‌شده داخل همان کلاس
+                clazz.getMethods().forEach(method -> {
+                    String methodName = method.getNameAsString();
+                    overloadedMethods
+                            .computeIfAbsent(methodName, k -> new ArrayList<>())
+                            .add(method);
+                });
+
+                // حذف یا کامنت‌گذاری متدهای اورلود‌شده
+                for (List<MethodDeclaration> methods : overloadedMethods.values()) {
+                    if (methods.size() > 1) {
+                        // نگه داشتن اولین متد و حذف یا کامنت کردن بقیه
+                        for (int i = 1; i < methods.size(); i++) {
+                            MethodDeclaration methodToDelete = methods.get(i);
+
+                            // روش اول: حذف متد
+                            methodToDelete.remove();
+
+                            // روش دوم: کامنت کردن متد
+                            // methodToDelete.setComment(new JavadocComment("This method was removed by OMD mutation operator."));
+                        }
+                    }
+                }
+            }
+        }, null);
+    }

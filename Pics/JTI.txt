@@ -1,0 +1,33 @@
+public static void applyJTI(CompilationUnit cu) {
+    cu.accept(new VoidVisitorAdapter<Void>() {
+        @Override
+        public void visit(NameExpr n, Void arg) {
+            super.visit(n, arg);
+
+            // بررسی اینکه آیا این نام مربوط به یک عضو کلاس است
+            if (isClassMember(n)) {
+                // اضافه کردن this. به قبل از نام
+                FieldAccessExpr fieldAccess = new FieldAccessExpr(new ThisExpr(), n.getNameAsString());
+                n.replace(fieldAccess);
+            }
+        }
+
+        @Override
+        public void visit(MethodCallExpr n, Void arg) {
+            super.visit(n, arg);
+
+            // بررسی اینکه آیا فراخوانی متد مربوط به یک متد عضو کلاس است
+            if (!n.getScope().isPresent()) {
+                // اضافه کردن this. به قبل از فراخوانی متد
+                n.setScope(new ThisExpr());
+            }
+        }
+
+        // متد کمکی برای بررسی اینکه آیا نام مربوط به یک عضو کلاس است
+        private boolean isClassMember(NameExpr n) {
+            // چک ساده برای شناسایی اعضای کلاس
+            // اینجا می‌توانید از تحلیل پیچیده‌تر استفاده کنید
+            return true; // فرض کنید همه نام‌ها عضو کلاس هستند
+        }
+    }, null);
+}

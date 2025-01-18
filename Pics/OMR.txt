@@ -1,0 +1,38 @@
+    public static void applyOMR(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ClassOrInterfaceDeclaration clazz, Void arg) {
+                super.visit(clazz, arg);
+
+                // نقشه‌ای برای ذخیره متدهای اورلود‌شده
+                Map<String, List<MethodDeclaration>> overloadedMethods = new HashMap<>();
+
+                // شناسایی متدهای اورلود‌شده داخل همان کلاس
+                clazz.getMethods().forEach(method -> {
+                    String methodName = method.getNameAsString();
+                    overloadedMethods
+                            .computeIfAbsent(methodName, k -> new ArrayList<>())
+                            .add(method);
+                });
+
+                // تعویض بدنه‌های متدهای اورلود‌شده
+                for (List<MethodDeclaration> methods : overloadedMethods.values()) {
+                    if (methods.size() > 1) {
+                        // تعویض بدنه‌ها فقط بین متدهای اورلود‌شده در همان کلاس
+                        BlockStmt firstBody = methods.get(0).getBody().orElse(null);
+                        for (int i = 1; i < methods.size(); i++) {
+                            BlockStmt currentBody = methods.get(i).getBody().orElse(null);
+
+                            if (firstBody != null && currentBody != null) {
+                                // تعویض بدنه‌های متد
+                                methods.get(i).setBody(firstBody.clone());
+                                firstBody = currentBody;
+                            }
+                        }
+                        // آخرین بدنه جایگزین بدنه اولین متد می‌شود
+                        methods.get(0).setBody(firstBody.clone());
+                    }
+                }
+            }
+        }, null);
+    }

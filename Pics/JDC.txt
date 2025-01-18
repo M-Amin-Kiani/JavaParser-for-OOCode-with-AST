@@ -1,0 +1,16 @@
+    // JDC: حذف سازنده‌های پیش‌فرض (بدون پارامتر) از کلاس‌ها
+    public static void applyJDC(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(ConstructorDeclaration n, Void arg) {
+                super.visit(n, arg);
+                // اگر سازنده هیچ پارامتری نداشته باشد، آن را حذف کن
+                if (n.getParameters().isEmpty()) {
+                    n.remove();
+                }
+                
+                // حذف همه سازنده‌ها (چه با پارامتر و چه بدون پارامتر)
+                // n.remove();
+            }
+        }, null);
+    }

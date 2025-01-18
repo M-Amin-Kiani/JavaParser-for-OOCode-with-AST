@@ -1,0 +1,37 @@
+    public static void applyOAC(CompilationUnit cu) {
+        // یافتن متدهای اورلود شده
+        Map<String, List<MethodDeclaration>> overloadedMethods = new HashMap<>();
+
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodDeclaration n, Void arg) {
+                super.visit(n, arg);
+                String methodName = n.getNameAsString();
+                overloadedMethods
+                        .computeIfAbsent(methodName, k -> new ArrayList<>())
+                        .add(n);
+            }
+        }, null);
+
+        // تغییر ترتیب آرگومان‌های فراخوانی‌ها
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(MethodCallExpr n, Void arg) {
+                super.visit(n, arg);
+                String methodName = n.getNameAsString();
+
+                // بررسی اینکه متد اورلود شده‌ای برای این فراخوانی وجود دارد
+                List<MethodDeclaration> methods = overloadedMethods.get(methodName);
+                if (methods != null && methods.size() > 1) {
+                    // پیدا کردن متدی با تعداد آرگومان‌های متفاوت
+                    for (MethodDeclaration method : methods) {
+                        if (method.getParameters().size() == n.getArguments().size() + 1) {
+                            // افزودن یک آرگومان پیش‌فرض به فراخوانی
+                            n.addArgument("null"); // یا آرگومان پیش‌فرض دیگری
+                            break;
+                        }
+                    }
+                }
+            }
+        }, null);
+    }

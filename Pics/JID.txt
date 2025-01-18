@@ -1,0 +1,16 @@
+    // JID: حذف مقداردهی اولیه متغیرها در کلاس‌ها
+    public static void applyJID(CompilationUnit cu) {
+        cu.accept(new VoidVisitorAdapter<Void>() {
+            @Override
+            public void visit(FieldDeclaration n, Void arg) {
+                super.visit(n, arg);
+                // حذف مقداردهی اولیه از متغیرها
+                n.getVariables().forEach(variable -> {
+                    if (variable.getInitializer().isPresent()) {
+                        Expression emptyExpr = null;  // برای حذف مقداردهی اولیه
+                        variable.setInitializer(emptyExpr);  // حذف مقداردهی اولیه
+                    }
+                });
+            }
+        }, null);
+    }
