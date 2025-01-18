@@ -1,6 +1,6 @@
 # JavaParser-for-OOCode-with-AST
-Using the JavaParser Library for Parsing OO Java Code and Manipulating the Abstract Syntax Tree (AST)
-
+Using the JavaParser Library for Parsing OO Java Code and Manipulating the Abstract Syntax Tree (AST),
+Then use the cohere chatbot to suggest selected operators.
 ![image](https://github.com/user-attachments/assets/a02fc508-5b5f-40cb-a98c-061a1951ab0c)
 
 ## ------------------ Mutations:
